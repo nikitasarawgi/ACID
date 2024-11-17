@@ -39,3 +39,6 @@ bash_scripts
 /PlushSim/assets/
 /PlushSim/interaction_sequence/
 .DS_Store
+/PlushSim/interaction_sequence*/**
+/PlushSim/ngc-cli/**
+/PlushSim/ngc-cli.md5
