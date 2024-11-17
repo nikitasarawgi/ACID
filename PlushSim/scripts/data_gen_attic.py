@@ -20,12 +20,12 @@ parser.add_argument("--save_dir", type=str, default="/result/interaction_sequenc
 parser.add_argument("--img_subdir", type=str, default='img')
 parser.add_argument("--geom_subdir", type=str, default='geom')
 parser.add_argument("--info_subdir", type=str, default='info')
-parser.add_argument("--save_every", type=int, default=25)
+parser.add_argument("--save_every", type=int, default=10)
 
 ################################################################
 # interaction args
-parser.add_argument("--num_interaction", type=int, default=18)
-parser.add_argument("--reset_every", type=int, default=6)
+parser.add_argument("--num_interaction", type=int, default=1)
+parser.add_argument("--reset_every", type=int, default=1)
 
 ################################################################
 # scene args
@@ -60,6 +60,8 @@ def main():
     # save scene overall info
     with open(os.path.join(info_dir, "scene_meta.json"), 'w') as fp:
         json.dump(scene.get_scene_metadata(), fp)
+    
+    print("Dumped scene_metadata")
 
     # number of resets
     num_resets = (args.num_interaction + args.reset_every - 1) // args.reset_every 
@@ -77,11 +79,12 @@ def main():
             'release_frames':[],
             'static_frames':[], }
 
+        eef_pos_null = np.full(7, -1)
         # save start frame    
         save_frame(f"{reset:04d}_{scene.frame:06d}", scene.get_observations(), img_dir)
         np.savez_compressed(
             os.path.join(geom_dir, f"{reset:04d}_{scene.frame:06d}.npz"), 
-            **scene.get_scene_state_plush(convert_to=np.float16))
+            **scene.get_scene_state_plush(eef_pos=eef_pos_null, convert_to=np.float16))
 
         for interaction in range(num_steps):
             # stop simulating
@@ -99,7 +102,7 @@ def main():
             save_frame(f"{reset:04d}_{scene.frame:06d}", scene.get_observations(), img_dir)
             np.savez_compressed(
                 os.path.join(geom_dir, f"{reset:04d}_{scene.frame:06d}.npz"), 
-                **scene.get_scene_state_plush(convert_to=np.float16))
+                **scene.get_scene_state_plush(eef_pos=eef_pos_null, convert_to=np.float16))
 
 
             scene.kit.play()
@@ -113,7 +116,7 @@ def main():
                     save_frame(f"{reset:04d}_{scene.frame:06d}", scene.get_observations(), img_dir)
                     np.savez_compressed(
                         os.path.join(geom_dir, f"{reset:04d}_{scene.frame:06d}.npz"), 
-                        **scene.get_scene_state_plush(convert_to=np.float16))
+                        **scene.get_scene_state_plush(eef_pos=eef_pos_null, convert_to=np.float16))
             
             scene.kit.pause()
             #init_move_traj = scene.gripper.set_translation(grasp_point)
@@ -127,10 +130,13 @@ def main():
                 scene.step()
                 scene.gripper.set_translation(tuple(pos))
                 if scene.frame % args.save_every == args.save_every - 1:
+                    eef_orientation_quat = scene.gripper.get_orientation()
+                    eef_orientation = np.array([eef_orientation_quat.GetReal(), *eef_orientation_quat.GetImaginary()])
+                    eef_pos_ts = np.concatenate([pos, eef_orientation])
                     save_frame(f"{reset:04d}_{scene.frame:06d}", scene.get_observations(), img_dir)
                     np.savez_compressed(
                         os.path.join(geom_dir, f"{reset:04d}_{scene.frame:06d}.npz"), 
-                        **scene.get_scene_state_plush(convert_to=np.float16))
+                        **scene.get_scene_state_plush(eef_pos=eef_pos_ts, convert_to=np.float16))
 
             # wait until stable
             for ff in range(scene.FALL_MAX):
@@ -142,7 +148,7 @@ def main():
             save_frame(f"{reset:04d}_{scene.frame:06d}", scene.get_observations(), img_dir)
             np.savez_compressed(
                 os.path.join(geom_dir, f"{reset:04d}_{scene.frame:06d}.npz"), 
-                **scene.get_scene_state_plush(convert_to=np.float16))
+                **scene.get_scene_state_plush(eef_pos=eef_pos_null, convert_to=np.float16))
             actions['release_frames'].append(np.array(scene.frame,np.uint16))
 
             # release
@@ -157,7 +163,7 @@ def main():
                     save_frame(f"{reset:04d}_{scene.frame:06d}", scene.get_observations(), img_dir)
                     np.savez_compressed(
                         os.path.join(geom_dir, f"{reset:04d}_{scene.frame:06d}.npz"), 
-                        **scene.get_scene_state_plush(convert_to=np.float16))
+                        **scene.get_scene_state_plush(eef_pos=eef_pos_null, convert_to=np.float16))
                 if ff < scene.DROP_MIN:
                     continue
                 if scene.check_scene_static():
@@ -168,7 +174,7 @@ def main():
             save_frame(f"{reset:04d}_{scene.frame:06d}", scene.get_observations(), img_dir)
             np.savez_compressed(
                 os.path.join(geom_dir, f"{reset:04d}_{scene.frame:06d}.npz"), 
-                **scene.get_scene_state_plush(convert_to=np.float16))
+                **scene.get_scene_state_plush(eef_pos=eef_pos_null, convert_to=np.float16))
             actions['static_frames'].append(np.array(scene.frame,np.uint16))
 
         np.savez_compressed(os.path.join(info_dir, f"interaction_info_{reset:04d}.npz"), **actions)

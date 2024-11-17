@@ -197,16 +197,36 @@ class attic_scene(object):
         return v < self.REST_THRESHOLD
 
     def get_scene_metadata(self):
-        from pxr import PhysxSchema
+        from pxr import PhysxSchema, UsdPhysics
         sbAPI = PhysxSchema.PhysxDeformableAPI(self.plush)
         faces = sbAPI.GetSimulationIndicesAttr().Get()
+
+        # massAPI = UsdPhysics.MassAPI.Apply(self.plush)
+        # center_of_mass = massAPI.GetCenterOfMassAttr().Get()
+        # density = massAPI.GetDensityAttr().Get()
+        material_prim = self.stage.GetPrimAtPath(self.plush_animal_mat)
+        materialAPI = PhysxSchema.PhysxDeformableBodyMaterialAPI(material_prim)
+        density = materialAPI.GetDensityAttr().Get()
+        elasticity_damping = materialAPI.GetElasticityDampingAttr().Get()
+        dynamic_friction = materialAPI.GetDynamicFrictionAttr().Get()
+        youngs_modulus = materialAPI.GetYoungsModulusAttr().Get()
+        poissons_ratio = materialAPI.GetPoissonsRatioAttr().Get()
+        damping_scale = materialAPI.GetDampingScaleAttr().Get()
+
+        print(f"Material Properties: density={density}, elasticity_damping={elasticity_damping}, dynamic_friction={dynamic_friction}, youngs_modulus={youngs_modulus}, poissons_ratio={poissons_ratio}, damping_scale={damping_scale}")
         return {'plush_path': self.PLUSH_ANIMAL_PATH,
                 'sim_faces':np.array(faces, int).tolist(),
                 'sim_pts':np.array(self.sim_og_pts, np.float16).tolist(),
                 'vis_pts':np.array(self.vis_og_pts, np.float16).tolist(),
                 'scene_range': self.scene_range.tolist(),
                 'back_clutter_range': self.back_clutter_range.tolist(),
-                'cam_info': self._get_camera_info()}
+                'cam_info': self._get_camera_info(),
+                'density': np.array(density, np.float64).tolist(),
+                'elasticity_damping': np.array(elasticity_damping, np.float64).tolist(),
+                'dynamic_friction': np.array(dynamic_friction, np.float64).tolist(),
+                'youngs_modulus': np.array(youngs_modulus, np.float64).tolist(),
+                'poissons_ratio': np.array(poissons_ratio, np.float64).tolist(),
+                'damping_scale': np.array(damping_scale, np.float64).tolist(),}
 
     # background state is different per reset
     def get_scene_background_state(self):
@@ -223,13 +243,13 @@ class attic_scene(object):
             collider[f"{name}_tran"] = f
         return collider
 
-    def get_scene_state_plush(self,raw=False,convert_to=None):
+    def get_scene_state_plush(self, eef_pos, raw=False,convert_to=None):
         sim,vis = self._get_plush_points()
         loc,rot,scale = self._get_plush_loc(),self._get_plush_rot(),self._get_plush_scale()
         if not raw:
             loc,rot,scale = tuple(loc),eval(str(rot)),tuple(scale)
         state = {'sim':sim, 'vis':vis,
-                 'loc':loc, 'rot':rot, 'scale':scale}
+                 'loc':loc, 'rot':rot, 'scale':scale, 'eef_pos': eef_pos}
         if convert_to is not None:
             for k,v in state.items():
                 state[k] = np.array(v, convert_to)
